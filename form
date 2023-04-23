@@ -1,0 +1,122 @@
+// Creates a new sheet in the specified folder with the given sheet name
+function createNewSheet(folderId, sheetName) {
+  var folder = DriveApp.getFolderById(folderId);
+  var sheet = SpreadsheetApp.create(sheetName);
+  var sheetId = sheet.getId();
+  var file = DriveApp.getFileById(sheetId);
+  folder.addFile(file);
+  var activeSheet = sheet.getActiveSheet();
+  
+  // Add headers to the sheet
+  if (activeSheet.getLastRow() === 0) {
+    activeSheet.appendRow(['Bill To', 'Date', 'Item', 'Description', 'Qty', 'Rate', 'Amount']);
+    activeSheet.getRange("A1:G1").setFontWeight("bold").setHorizontalAlignment("center");
+  }
+  
+  return sheetId;
+}
+
+// Called when a new form submission is received
+// Called when a new form submission is received
+// Called when a new form submission is received
+function onFormSubmit(event) {
+  const e = event.response;
+  var folderId = "1zUBJozvzZJr5Mg9YoweFYHTFYSF-F7w9";
+  var sheetName = e.getItemResponses()[0].getResponse();
+  var item = e.getItemResponses()[1].getResponse();
+  var description = e.getItemResponses()[2].getResponse();
+  var qty = e.getItemResponses()[3].getResponse();
+  var rate = e.getItemResponses()[4].getResponse();
+  
+  var files = DriveApp.getFolderById(folderId).getFilesByName(sheetName);
+  
+  if (files.hasNext()) {
+    var sheet = SpreadsheetApp.openById(files.next().getId()).getActiveSheet();
+    var amount = qty * rate;
+    sheet.appendRow([sheetName, new Date(), item, description, qty, rate, amount]);
+  } else {
+    var sheetId = createNewSheet(folderId, sheetName);
+    var sheet = SpreadsheetApp.openById(sheetId).getActiveSheet();
+    var amount = qty * rate;
+    sheet.appendRow([sheetName, new Date(), item, description, qty, rate, amount]);
+  }
+
+  // Calculate the sum of the Amount column
+  var lastRow = sheet.getLastRow();
+  var amountRange = sheet.getRange(2, 7, lastRow - 1);
+  var amountValues = amountRange.getValues();
+  var sumAmount = amountValues.reduce((acc, curr) => acc + curr[0], 0);
+
+  // Create a new Google Doc
+  var docName = sheetName + " Invoice";
+  var doc = DocumentApp.create(docName);
+
+  // Get the body of the document
+  var body = doc.getBody();
+  console.log(body);
+  // Add the Company name and address to the top of the document
+  var companyName = "Company P Sathya Narayan";
+var companyAddress = "123 Main Street, Anytown USA";
+var companyParagraph = body.insertParagraph(0, companyName + "\t\t" + companyAddress);
+
+// Apply styles to the company name and address paragraph
+companyParagraph.setBold(true);
+companyParagraph.setSpacingAfter(0);
+companyParagraph.setAlignment(DocumentApp.HorizontalAlignment.RIGHT);
+companyParagraph.setIndentStart(140);
+companyParagraph.setIndentEnd(0);
+companyParagraph.setFontSize(12);
+companyParagraph.setForegroundColor("#333333");
+  // companyParagraph.setHeading(DocumentApp.ParagraphHeading.HEADING1);
+  body.appendHorizontalRule();
+  // Add the "From" address in a table
+  var fromAddress = e.getItemResponses()[0].getResponse();
+  var table = body.appendTable([["Bill To", fromAddress]]);
+  table.setBorderWidth(1);
+  body.appendHorizontalRule();
+  
+  // body.insertPageBreak();
+  // Get the values of the sheet as a 2D array
+  var sheetValue = sheet.getDataRange();
+  var valuesWithoutFirstColumn = sheetValue.getDisplayValues();
+  // Remove the first column from sheetValues
+var sheetValues = valuesWithoutFirstColumn.map(function(row) {
+  return row.slice(1,-1);
+});
+
+
+  // Add the sheet values as a table to the document
+  // var sheetTable = body.appendTable(sheetValues);
+  var sheetTable = body.appendTable(sheetValues);
+  sheetTable.setBorderWidth(2);
+
+  // Add the footer with Terms and Conditions and Total
+body.appendHorizontalRule();
+body.appendParagraph("Terms and Conditions").setAlignment(DocumentApp.HorizontalAlignment.LEFT);
+body.appendParagraph("Total: ₹ " + sumAmount).setAlignment(DocumentApp.HorizontalAlignment.RIGHT);
+
+
+  // Save and close the document
+  var parentFolder = DriveApp.getFolderById("1zUBJozvzZJr5Mg9YoweFYHTFYSF-F7w9"); // get the parent folder by ID
+var folders = parentFolder.getFoldersByName("invoice"); // check if a folder named "invoice" already exists
+var newFolder;
+
+if (folders.hasNext()) {
+  newFolder = folders.next(); // if the folder already exists, use it
+} else {
+  newFolder = parentFolder.createFolder("invoice"); // if the folder doesn't exist, create it
+}
+
+var files = newFolder.getFilesByName(doc.getName()); // check if a file with the same name already exists in the "invoice" folder
+while (files.hasNext()) {
+  var existingFile = files.next();
+  existingFile.setTrashed(true); // delete the existing file
+} 
+  newFolder.addFile(DriveApp.getFileById(doc.getId())); // if the file doesn't exist, add it to the "invoice" folder
+
+
+doc.saveAndClose();
+
+}
+
+
